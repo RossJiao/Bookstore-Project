@@ -37,5 +37,31 @@
     "total_price": 12.99,
     "order_date": "2026-06-25 23:09:22",
     "status": "pending"
+  },
+  {
+    "order_id": "ORD-20260629-0001",
+    "user_name": "2",
+    "user_email": "3",
+    "book_id": 1,
+    "book_title": "The Great Gatsby",
+    "book_author": "F. Scott Fitzgerald",
+    "quantity": 1,
+    "unit_price": 12.99,
+    "total_price": 12.99,
+    "order_date": "2026-06-29 00:18:43",
+    "status": "pending"
+  },
+  {
+    "order_id": "ORD-20260629-0002",
+    "user_name": "Ross",
+    "user_email": "rossjiao122@gmail.com",
+    "book_id": 1,
+    "book_title": "The Great Gatsby",
+    "book_author": "F. Scott Fitzgerald",
+    "quantity": 1,
+    "unit_price": 12.99,
+    "total_price": 12.99,
+    "order_date": "2026-06-29 00:22:23",
+    "status": "pending"
   }
 ]

@@ -1,7 +1,7 @@
-import json
+import sqlite3
 import os
-import smtplib
 from datetime import datetime
+import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -9,38 +9,90 @@ from email import encoders
 
 # Email configuration - REPLACE WITH YOUR OWN
 EMAIL_SENDER = "rossjiao122@gmail.com"
-EMAIL_PASSWORD = "gnhx ztuo cekb ocin"  # 16-digit app password
+EMAIL_PASSWORD = "gnhxztuocekbocin"
 EMAIL_SMTP_SERVER = "smtp.gmail.com"
 EMAIL_SMTP_PORT = 587
 
-def load_books():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(script_dir, 'books.json')
-    with open(file_path, 'r') as f:
-        return json.load(f)
+def get_db_path():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bookstore.db')
 
-def load_orders():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(script_dir, 'orders.json')
-    if os.path.exists(file_path):
-        with open(file_path, 'r') as f:
-            return json.load(f)
-    return []
+def get_books():
+    conn = sqlite3.connect(get_db_path())
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, title, author, price FROM books')
+    books = cursor.fetchall()
+    conn.close()
+    return books
 
-def save_order(order, orders):
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(script_dir, 'orders.json')
-    orders.append(order)
-    with open(file_path, 'w') as f:
-        json.dump(orders, f, indent=2)
+def get_book_by_id(book_id):
+    conn = sqlite3.connect(get_db_path())
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, title, author, price FROM books WHERE id = ?', (book_id,))
+    book = cursor.fetchone()
+    conn.close()
+    return book
+
+def save_order(order):
+    conn = sqlite3.connect(get_db_path())
+    cursor = conn.cursor()
+    
+    # Create orders table if it doesn't exist
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS orders (
+            order_id TEXT PRIMARY KEY,
+            user_name TEXT NOT NULL,
+            user_email TEXT NOT NULL,
+            book_id INTEGER,
+            book_title TEXT,
+            book_author TEXT,
+            quantity INTEGER,
+            unit_price REAL,
+            total_price REAL,
+            order_date TEXT,
+            status TEXT
+        )
+    ''')
+    
+    cursor.execute('''
+        INSERT INTO orders (
+            order_id, user_name, user_email, book_id, book_title, book_author,
+            quantity, unit_price, total_price, order_date, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        order['order_id'], order['user_name'], order['user_email'],
+        order['book_id'], order['book_title'], order['book_author'],
+        order['quantity'], order['unit_price'], order['total_price'],
+        order['order_date'], order['status']
+    ))
+    
+    conn.commit()
+    conn.close()
 
 def generate_order_id():
     now = datetime.now()
     date_str = now.strftime("%Y%m%d")
-    orders = load_orders()
-    today_orders = [o for o in orders if o['order_id'].startswith(f"ORD-{date_str}")]
-    count = len(today_orders) + 1
-    return f"ORD-{date_str}-{count:04d}"
+    conn = sqlite3.connect(get_db_path())
+    cursor = conn.cursor()
+    # Create orders table if it doesn't exist (for the count query)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS orders (
+            order_id TEXT PRIMARY KEY,
+            user_name TEXT NOT NULL,
+            user_email TEXT NOT NULL,
+            book_id INTEGER,
+            book_title TEXT,
+            book_author TEXT,
+            quantity INTEGER,
+            unit_price REAL,
+            total_price REAL,
+            order_date TEXT,
+            status TEXT
+        )
+    ''')
+    cursor.execute('SELECT COUNT(*) FROM orders WHERE order_id LIKE ?', (f'ORD-{date_str}%',))
+    count = cursor.fetchone()[0]
+    conn.close()
+    return f"ORD-{date_str}-{count + 1:04d}"
 
 def generate_ebook_placeholder(order):
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -131,7 +183,7 @@ Ross' Bookstore
         return False
 
 def create_order():
-    books = load_books()
+    books = get_books()
     
     print("\n" + "=" * 50)
     print("Place an Order")
@@ -139,19 +191,19 @@ def create_order():
     
     print("\nAvailable Books:")
     for book in books:
-        print(f"  {book['id']}. {book['title']} - ${book['price']}")
+        print(f"  {book[0]}. {book[1]} - ${book[2]}")
     
     while True:
         try:
             book_id = int(input("\nEnter the book ID you want to purchase: "))
-            selected_book = next((b for b in books if b['id'] == book_id), None)
+            selected_book = get_book_by_id(book_id)
             if selected_book:
                 break
             print("Invalid ID. Please choose a number from the list.")
         except ValueError:
             print("Please enter a valid number.")
     
-    print(f"\nSelected: {selected_book['title']} by {selected_book['author']}")
+    print(f"\nSelected: {selected_book[1]} by {selected_book[2]}")
     user_name = input("Enter your full name: ").strip()
     user_email = input("Enter your email address: ").strip()
     
@@ -164,24 +216,23 @@ def create_order():
         except ValueError:
             print("Please enter a valid number.")
     
-    total = selected_book['price'] * quantity
+    total = selected_book[3] * quantity
     
     order = {
         'order_id': generate_order_id(),
         'user_name': user_name,
         'user_email': user_email,
-        'book_id': selected_book['id'],
-        'book_title': selected_book['title'],
-        'book_author': selected_book['author'],
+        'book_id': selected_book[0],
+        'book_title': selected_book[1],
+        'book_author': selected_book[2],
         'quantity': quantity,
-        'unit_price': selected_book['price'],
+        'unit_price': selected_book[3],
         'total_price': round(total, 2),
         'order_date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         'status': 'pending'
     }
     
-    orders = load_orders()
-    save_order(order, orders)
+    save_order(order)
     
     ebook_file = generate_ebook_placeholder(order)
     print(f"\n[eBook placeholder generated: {ebook_file}]")

@@ -1,47 +1,46 @@
-import json
+import sqlite3
 import os
 
-def load_books():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(script_dir, 'books.json')
-    with open(file_path, 'r') as f:
-        return json.load(f)
+def get_db_path():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bookstore.db')
 
-def search_books(keyword, books):
-    """Search for books by title or author (case-insensitive)"""
-    keyword = keyword.lower()
-    results = []
-    for book in books:
-        if keyword in book['title'].lower() or keyword in book['author'].lower() or keyword in book.get('genre', '').lower():
-            results.append(book)
+def search_books(keyword):
+    conn = sqlite3.connect(get_db_path())
+    cursor = conn.cursor()
+    
+    keyword = f'%{keyword}%'
+    cursor.execute('''
+        SELECT id, title, author, price, description, genre
+        FROM books
+        WHERE title LIKE ? OR author LIKE ? OR genre LIKE ?
+    ''', (keyword, keyword, keyword))
+    
+    results = cursor.fetchall()
+    conn.close()
     return results
 
 def display_books(books):
-    """Display a list of books in a readable format"""
     if not books:
         print("No books found.")
         return
     print("\n" + "=" * 50)
     for book in books:
-        print(f"ID: {book['id']}")
-        print(f"Title: {book['title']}")
-        print(f"Author: {book['author']}")
-        print(f"Price: ${book['price']}")
-        print(f"Description: {book['description']}")
+        print(f"ID: {book[0]}")
+        print(f"Title: {book[1]}")
+        print(f"Author: {book[2]}")
+        print(f"Price: ${book[3]}")
+        print(f"Description: {book[4]}")
+        print(f"Genre: {book[5]}")
         print("-" * 30)
     print("=" * 50)
 
 def main():
-    books = load_books()
     print("Welcome to Ross' Bookstore!")
-    print("Available books:")
-    display_books(books)
-    
     while True:
-        keyword = input("\nSearch for a book (title/author), or 'quit' to exit: ")
+        keyword = input("\nSearch for a book (title/author/genre), or 'quit' to exit: ")
         if keyword.lower() == 'quit':
             break
-        results = search_books(keyword, books)
+        results = search_books(keyword)
         display_books(results)
 
 if __name__ == "__main__":
